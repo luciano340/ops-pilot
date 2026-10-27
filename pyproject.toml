@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ops-pilot"
+version = "0.1.0"
+description = "Monitoring infrastructure for operations"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "Django>=6.1,<6.2",
+    "psycopg[binary]>=3.2,<4",
+    "pydantic>=2,<3",
+    "langchain-core",
+    "langchain-openai",
+]
+
+[project.optional-dependencies]
+dev = [
+    "django-stubs",
+    "mypy",
+    "pytest",
+    "pytest-django",
+    "taskipy",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["config"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings"
+strict_settings = true
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["mypy_django_plugin.main"]
+mypy_path = "src"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.taskipy.tasks]
+dev = "python manage.py runserver"
+cli = "python manage.py shell"
+test = "pytest"
+typecheck = "mypy ."
+arena = "python manage.py arena"
+bench = "python manage.py bench"

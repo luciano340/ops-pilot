@@ -1,0 +1,27 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.typeCheckingMode": "strict",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "chat.tools.terminal.autoApprove": {
+    "/^pytest(?:\\s|$).*$/": true,
+    "/^python(?:\\.exe)?\\s+-m\\s+pytest(?:\\s|$).*$/": true,
+    "/^git\\s+status(?:\\s|$).*$/": true,
+    "/^git\\s+add(?:\\s|$).*$/": true,
+    "/^git\\s+commit(?:\\s|$).*$/": true,
+    "/(^|[;&|]\\s*)sudo(?:\\s|$)/i": false,
+    "/(^|[;&|]\\s*)rm\\s+-rf(?:\\s|$)/i": false,
+    "/\\bgit\\s+push\\b.*(?:\\s-f(?:\\s|$)|\\s--force(?:\\s|$))/i": false
+  }
+}
