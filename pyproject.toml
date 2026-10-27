@@ -11,6 +11,8 @@ dependencies = [
     "Django>=6.1,<6.2",
     "psycopg[binary]>=3.2,<4",
     "pydantic>=2,<3",
+    "langchain",
+    "langgraph",
     "langchain-core",
     "langchain-openai",
 ]
@@ -26,7 +28,10 @@ dev = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["config"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["config*", "agents*", "operations*"]
 
 [tool.django-stubs]
 django_settings_module = "config.settings"
@@ -35,8 +40,12 @@ strict_settings = true
 [tool.mypy]
 python_version = "3.14"
 strict = true
-plugins = ["mypy_django_plugin.main"]
+plugins = ["mypy_django_plugin.main", "pydantic.mypy"]
 mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["langchain.*", "langchain_openai.*", "langgraph.*"]
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
