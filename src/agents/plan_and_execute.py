@@ -8,7 +8,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
-from langgraph.graph import START, StateGraph
+from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic.v1 import BaseModel as PydanticV1BaseModel
 
@@ -57,6 +57,7 @@ class PlanState(TypedDict):
     iterations: int
     llm_calls: int
     max_iterations: int
+    no_replanner: bool
     answer: str
 
 
@@ -69,11 +70,13 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
         tools: Sequence[BaseTool],
         *,
         max_iterations: int = MAX_ITERATIONS,
+        no_replanner: bool = False,
     ) -> None:
         if not 1 <= max_iterations <= MAX_ITERATIONS:
             raise ValueError(f"max_iterations must be between 1 and {MAX_ITERATIONS}")
         self._planner: Runnable[Any, Any] = model.with_structured_output(Plan)
         self._replanner: Runnable[Any, Any] = model.with_structured_output(PlanReview)
+        self._finalizer = model
         self._executor: Runnable[Any, Any] = model.bind_tools(list(tools))
         self._tools = {tool.name: tool for tool in tools}
         self._tool_catalog = [
@@ -85,15 +88,18 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
             for tool in tools
         ]
         self._max_iterations = max_iterations
+        self._no_replanner = no_replanner
 
         builder = StateGraph(PlanState)
         builder.add_node("planner", self._plan)
         builder.add_node("executor", self._execute)
         builder.add_node("replanner", self._replan)
+        builder.add_node("finalizer", self._finalize)
         builder.add_edge(START, "planner")
         builder.add_conditional_edges("planner", self._route_after_plan)
-        builder.add_edge("executor", "replanner")
+        builder.add_conditional_edges("executor", self._route_after_execute)
         builder.add_conditional_edges("replanner", self._route_after_replan)
+        builder.add_edge("finalizer", END)
         self._graph = builder.compile()
 
     async def run(self, input: str) -> StrategyResult:
@@ -110,6 +116,7 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
                 "iterations": 0,
                 "llm_calls": 0,
                 "max_iterations": self._max_iterations,
+                "no_replanner": self._no_replanner,
                 "answer": "",
             }
         )
@@ -313,9 +320,54 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
             "llm_calls": state["llm_calls"] + 1,
         }
 
+    async def _finalize(self, state: PlanState) -> dict[str, Any]:
+        message = await self._finalizer.ainvoke(
+            [
+                SystemMessage(
+                    content=(
+                        "Answer the original request using the execution observations. "
+                        "Do not claim an action succeeded unless an observation confirms "
+                        "it. If planned steps remain unexecuted, state that clearly."
+                    )
+                ),
+                HumanMessage(
+                    content=json.dumps(
+                        {
+                            "request": state["request"],
+                            "observations": state["observations"],
+                            "unexecuted_steps": [
+                                step.description for step in state["steps"]
+                            ],
+                        },
+                        ensure_ascii=False,
+                    )
+                ),
+            ]
+        )
+        if not isinstance(message, AIMessage):
+            raise RuntimeError("Plan finalizer returned an invalid model response")
+        answer = str(message.content).strip()
+        if not answer:
+            raise RuntimeError("Plan finalizer returned an empty answer")
+        return {
+            "answer": answer,
+            "trace": [TraceEvent(type="answer", content=answer)],
+            "llm_calls": state["llm_calls"] + 1,
+        }
+
     @staticmethod
     def _route_after_plan(state: PlanState) -> Literal["executor", "__end__"]:
         return "executor" if state["steps"] else "__end__"
+
+    @staticmethod
+    def _route_after_execute(
+        state: PlanState,
+    ) -> Literal["executor", "replanner", "finalizer"]:
+        if not state["no_replanner"]:
+            return "replanner"
+        if state["steps"] and state["iterations"] < state["max_iterations"]:
+            return "executor"
+        return "finalizer"
 
     @staticmethod
     def _route_after_replan(state: PlanState) -> Literal["executor", "__end__"]:

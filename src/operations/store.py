@@ -23,6 +23,8 @@ class OperationsStore:
         )
         if query.status is not None:
             queryset = queryset.filter(status=query.status)
+        if query.severity is not None:
+            queryset = queryset.filter(severity=query.severity)
 
         async def collect_page() -> list[AlertDTO]:
             items: list[AlertDTO] = []
@@ -32,6 +34,7 @@ class OperationsStore:
                 "name",
                 "message",
                 "status",
+                "severity",
             )[query.offset : query.offset + query.limit]
             async for row in rows:
                 items.append(
@@ -41,6 +44,7 @@ class OperationsStore:
                         name=row["name"],
                         message=row["message"],
                         status=row["status"],
+                        severity=row["severity"],
                     )
                 )
             return items

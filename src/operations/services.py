@@ -21,6 +21,8 @@ class OperationsService:
             raise ValueError("Alert page offset must not be negative")
         if query.status not in (None, "firing", "resolved"):
             raise ValueError(f"Unsupported alert status: {query.status}")
+        if query.severity not in (None, "critical", "warning", "info"):
+            raise ValueError(f"Unsupported alert severity: {query.severity}")
         return await self._store.list_alerts(query)
 
     async def open_incident(self, payload: OpenIncidentDTO) -> IncidentDTO:

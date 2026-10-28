@@ -24,15 +24,22 @@ def _to_json(value: object) -> str:
 
 async def list_alerts(
     status: str | None = None,
+    severity: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> str:
     payload = ListAlertsInput.model_validate(
-        {"status": status, "limit": limit, "offset": offset}
+        {
+            "status": status,
+            "severity": severity,
+            "limit": limit,
+            "offset": offset,
+        }
     )
     page = await _service().list_alerts(
         ListAlertsDTO(
             status=payload.status,
+            severity=payload.severity,
             limit=payload.limit,
             offset=payload.offset,
         )
@@ -70,7 +77,9 @@ def get_agent_tools() -> list[StructuredTool]:
         StructuredTool.from_function(
             coroutine=list_alerts,
             name="list_alerts",
-            description="List operational alerts, optionally filtered by status.",
+            description=(
+                "List operational alerts, optionally filtered by status or severity."
+            ),
             args_schema=ListAlertsInput,
         ),
         StructuredTool.from_function(

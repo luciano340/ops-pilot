@@ -19,6 +19,11 @@ class Alert(models.Model):
         FIRING = "firing", "Firing"
         RESOLVED = "resolved", "Resolved"
 
+    class Severity(models.TextChoices):
+        CRITICAL = "critical", "Critical"
+        WARNING = "warning", "Warning"
+        INFO = "info", "Info"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     service = models.ForeignKey(
         Service,
@@ -28,6 +33,11 @@ class Alert(models.Model):
     name = models.CharField(max_length=200)
     message = models.TextField(blank=True)
     status = models.CharField(max_length=8, choices=Status.choices, db_index=True)
+    severity = models.CharField(
+        max_length=10,
+        choices=Severity.choices,
+        default=Severity.INFO,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -33,8 +33,14 @@ def test_open_and_resolve_incident_tools_use_persistent_service() -> None:
 @pytest.mark.django_db(transaction=True)
 def test_list_alerts_tool_returns_json_and_optional_status_filter() -> None:
     service = Service.objects.create(name="checkout")
-    Alert.objects.create(service=service, name="latency", status=Alert.Status.FIRING)
+    Alert.objects.create(
+        service=service,
+        name="latency",
+        status=Alert.Status.FIRING,
+        severity=Alert.Severity.CRITICAL,
+    )
 
-    result = asyncio.run(list_alerts(status="firing"))
+    result = asyncio.run(list_alerts(status="firing", severity="critical"))
 
     assert json.loads(result)["items"][0]["status"] == "firing"
+    assert json.loads(result)["items"][0]["severity"] == "critical"

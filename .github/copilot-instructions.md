@@ -58,3 +58,7 @@ speckit.specify → speckit.plan → speckit.tasks → speckit.implement
 4. **`speckit.implement`** — executa as tarefas: código, testes verdes, typecheck verde, commit.
 
 Specs são artefatos de primeira classe — criadas, revisadas e versionadas junto com o código. Nenhuma implementação começa sem spec aprovada.
+
+## MCP
+
+Sempre utilize o MCP do context7 para obter a documentação atualizada da linguagem de programação, dependências, frameworks e bibliotecas.

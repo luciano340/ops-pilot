@@ -18,17 +18,30 @@ from operations.store import OperationsStore
 @pytest.mark.django_db(transaction=True)
 def test_store_lists_filtered_alerts_with_total_and_page_limit() -> None:
     service = Service.objects.create(name="checkout")
-    Alert.objects.create(service=service, name="latency", status=Alert.Status.FIRING)
-    Alert.objects.create(service=service, name="errors", status=Alert.Status.RESOLVED)
+    Alert.objects.create(
+        service=service,
+        name="latency",
+        status=Alert.Status.FIRING,
+        severity=Alert.Severity.CRITICAL,
+    )
+    Alert.objects.create(
+        service=service,
+        name="errors",
+        status=Alert.Status.RESOLVED,
+        severity=Alert.Severity.INFO,
+    )
 
     page = asyncio.run(
-        OperationsStore().list_alerts(ListAlertsDTO(status="firing", limit=1))
+        OperationsStore().list_alerts(
+            ListAlertsDTO(status="firing", severity="critical", limit=1)
+        )
     )
 
     assert len(page.items) == 1
     assert page.total == 1
     assert page.items[0].service == "checkout"
     assert page.items[0].status == "firing"
+    assert page.items[0].severity == "critical"
 
 
 @pytest.mark.django_db(transaction=True)

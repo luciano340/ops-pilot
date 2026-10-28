@@ -29,9 +29,10 @@ class PlanFakeModel(FakeMessagesListChatModel):
         *,
         structured_responses: Sequence[BaseModel | Exception],
         tool_responses: Sequence[AIMessage],
+        responses: Sequence[AIMessage] = (),
     ) -> None:
         super().__init__(
-            responses=[],
+            responses=list(responses),
             structured_responses=list(structured_responses),
             structured_inputs=[],
             tool_responses=list(tool_responses),
@@ -151,6 +152,59 @@ def test_plan_and_execute_runs_one_tool_then_replans_to_completion() -> None:
         "observation",
         "critique",
         "plan",
+        "answer",
+    ]
+
+
+def test_plan_and_execute_without_replanner_synthesizes_one_final_answer() -> None:
+    model = PlanFakeModel(
+        structured_responses=[
+            Plan(steps=[PlanStep(description="List firing alerts")]),
+        ],
+        tool_responses=[_tool_call()],
+        responses=[AIMessage(content="There are no firing alerts.")],
+    )
+    strategy = PlanAndExecuteStrategy(model, [_tool()], no_replanner=True)
+
+    result = asyncio.run(strategy.run("Check firing alerts"))
+
+    assert result.answer == "There are no firing alerts."
+    assert result.metrics.llm_calls == 3
+    assert len(model.structured_inputs) == 1
+    assert [event.type for event in result.trace] == [
+        "plan",
+        "action",
+        "observation",
+        "answer",
+    ]
+
+
+def test_plan_and_execute_without_replanner_runs_all_initial_steps_in_order() -> None:
+    model = PlanFakeModel(
+        structured_responses=[
+            Plan(
+                steps=[
+                    PlanStep(description="List firing alerts"),
+                    PlanStep(description="Summarize alert status"),
+                ]
+            ),
+        ],
+        tool_responses=[_tool_call(), _tool_call()],
+        responses=[AIMessage(content="Both planned steps are complete.")],
+    )
+    strategy = PlanAndExecuteStrategy(model, [_tool()], no_replanner=True)
+
+    result = asyncio.run(strategy.run("Review firing alerts"))
+
+    assert result.answer == "Both planned steps are complete."
+    assert result.metrics.llm_calls == 4
+    assert len(model.structured_inputs) == 1
+    assert [event.type for event in result.trace] == [
+        "plan",
+        "action",
+        "observation",
+        "action",
+        "observation",
         "answer",
     ]
 

@@ -33,6 +33,7 @@ class AlertDTO:
     name: str
     message: str
     status: str
+    severity: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +55,7 @@ class AlertPageDTO:
 @dataclass(frozen=True, slots=True)
 class ListAlertsDTO:
     status: str | None = None
+    severity: str | None = None
     limit: int = 100
     offset: int = 0
 

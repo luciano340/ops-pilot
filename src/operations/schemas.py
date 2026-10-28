@@ -8,6 +8,7 @@ class ListAlertsInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["firing", "resolved"] | None = None
+    severity: Literal["critical", "warning", "info"] | None = None
     limit: int = Field(default=100, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
 

@@ -14,12 +14,37 @@ SERVICE_FIXTURE = (
 )
 
 ALERT_FIXTURE = (
-    ("api", "Elevated 5xx responses", Alert.Status.FIRING),
-    ("checkout", "Payment authorization latency", Alert.Status.FIRING),
-    ("worker", "Queue backlog above threshold", Alert.Status.FIRING),
-    ("database", "Replica lag returned to normal", Alert.Status.RESOLVED),
-    ("web", "Homepage availability recovered", Alert.Status.RESOLVED),
-    ("checkout", "Checkout error rate recovered", Alert.Status.RESOLVED),
+    ("api", "Elevated 5xx responses", Alert.Status.FIRING, Alert.Severity.CRITICAL),
+    (
+        "checkout",
+        "Payment authorization latency",
+        Alert.Status.FIRING,
+        Alert.Severity.CRITICAL,
+    ),
+    (
+        "worker",
+        "Queue backlog above threshold",
+        Alert.Status.FIRING,
+        Alert.Severity.CRITICAL,
+    ),
+    (
+        "database",
+        "Replica lag returned to normal",
+        Alert.Status.RESOLVED,
+        Alert.Severity.INFO,
+    ),
+    (
+        "web",
+        "Homepage availability recovered",
+        Alert.Status.RESOLVED,
+        Alert.Severity.INFO,
+    ),
+    (
+        "checkout",
+        "Checkout error rate recovered",
+        Alert.Status.RESOLVED,
+        Alert.Severity.INFO,
+    ),
 )
 
 SEED_NAMESPACE = uuid.UUID("0ffea316-2752-4c70-9dba-30b73b081c57")
@@ -59,13 +84,14 @@ class Command(BaseCommand):
                 name=name,
                 message=name,
                 status=status,
+                severity=severity,
             )
-            for service_name, name, status in ALERT_FIXTURE
+            for service_name, name, status, severity in ALERT_FIXTURE
         ]
         Alert.objects.bulk_create(
             alerts,
             update_conflicts=True,
-            update_fields=["message", "status"],
+            update_fields=["message", "status", "severity"],
             unique_fields=["service", "name"],
         )
         self.stdout.write(

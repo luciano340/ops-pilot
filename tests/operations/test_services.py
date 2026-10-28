@@ -17,8 +17,11 @@ from operations.store import OperationsStore
 
 def test_tool_schemas_validate_status_nonempty_values_and_uuid() -> None:
     assert ListAlertsInput(status="firing").status == "firing"
+    assert ListAlertsInput(severity="critical").severity == "critical"
     with pytest.raises(ValidationError):
         ListAlertsInput(status="unknown")
+    with pytest.raises(ValidationError):
+        ListAlertsInput(severity="urgent")
     with pytest.raises(ValidationError):
         OpenIncidentInput(title=" ", service="checkout", severity="high")
     with pytest.raises(ValidationError):
@@ -28,11 +31,18 @@ def test_tool_schemas_validate_status_nonempty_values_and_uuid() -> None:
 @pytest.mark.django_db(transaction=True)
 def test_services_list_and_create_incidents() -> None:
     service = Service.objects.create(name="checkout")
-    Alert.objects.create(service=service, name="latency", status=Alert.Status.FIRING)
+    Alert.objects.create(
+        service=service,
+        name="latency",
+        status=Alert.Status.FIRING,
+        severity=Alert.Severity.CRITICAL,
+    )
 
     async def invoke() -> tuple[int, str]:
         business = OperationsService(OperationsStore())
-        page = await business.list_alerts(ListAlertsDTO(status=None))
+        page = await business.list_alerts(
+            ListAlertsDTO(status=None, severity="critical")
+        )
         incident = await business.open_incident(
             OpenIncidentDTO("Elevated errors", "checkout", "high")
         )
@@ -41,6 +51,16 @@ def test_services_list_and_create_incidents() -> None:
     total, status = asyncio.run(invoke())
     assert total == 1
     assert status == "open"
+
+
+def test_service_rejects_unsupported_alert_severity() -> None:
+    async def invoke() -> None:
+        await OperationsService(OperationsStore()).list_alerts(
+            ListAlertsDTO(severity="urgent")
+        )
+
+    with pytest.raises(ValueError, match="Unsupported alert severity"):
+        asyncio.run(invoke())
 
 
 @pytest.mark.django_db(transaction=True)

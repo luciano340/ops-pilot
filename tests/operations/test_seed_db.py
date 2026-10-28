@@ -13,6 +13,26 @@ def test_seed_db_is_repeatable_with_expected_fixture_counts() -> None:
     assert Alert.objects.count() == 6
     assert Alert.objects.filter(status=Alert.Status.FIRING).count() == 3
     assert Alert.objects.filter(status=Alert.Status.RESOLVED).count() == 3
+    assert Alert.objects.filter(
+        status=Alert.Status.FIRING,
+        severity=Alert.Severity.CRITICAL,
+    ).count() == 3
+    assert Alert.objects.filter(
+        status=Alert.Status.RESOLVED,
+        severity=Alert.Severity.INFO,
+    ).count() == 3
+
+
+@pytest.mark.django_db
+def test_seed_db_refreshes_severity_on_existing_fixture_alerts() -> None:
+    call_command("seed_db")
+    critical_alert = Alert.objects.get(name="Elevated 5xx responses")
+    critical_alert.severity = Alert.Severity.WARNING
+    critical_alert.save(update_fields=["severity"])
+
+    call_command("seed_db")
+
+    assert Alert.objects.get(pk=critical_alert.pk).severity == Alert.Severity.CRITICAL
 
 
 @pytest.mark.django_db
@@ -28,5 +48,6 @@ def test_seed_db_preserves_records_outside_its_fixture() -> None:
 
     assert Service.objects.filter(pk=external_service.pk).exists()
     assert Alert.objects.filter(pk=external_alert.pk).exists()
+    assert external_alert.severity == Alert.Severity.INFO
     assert Service.objects.count() == 6
     assert Alert.objects.count() == 7
