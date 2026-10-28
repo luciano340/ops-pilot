@@ -9,6 +9,7 @@ class ListAlertsInput(BaseModel):
 
     status: Literal["firing", "resolved"] | None = None
     severity: Literal["critical", "warning", "info"] | None = None
+    order: Literal["oldest", "newest"] = "newest"
     limit: int = Field(default=100, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
 

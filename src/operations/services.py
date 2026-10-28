@@ -23,6 +23,8 @@ class OperationsService:
             raise ValueError(f"Unsupported alert status: {query.status}")
         if query.severity not in (None, "critical", "warning", "info"):
             raise ValueError(f"Unsupported alert severity: {query.severity}")
+        if query.order not in ("oldest", "newest"):
+            raise ValueError(f"Unsupported alert order: {query.order}")
         return await self._store.list_alerts(query)
 
     async def open_incident(self, payload: OpenIncidentDTO) -> IncidentDTO:

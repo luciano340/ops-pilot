@@ -34,6 +34,7 @@ class AlertDTO:
     message: str
     status: str
     severity: str
+    created_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +57,7 @@ class AlertPageDTO:
 class ListAlertsDTO:
     status: str | None = None
     severity: str | None = None
+    order: str = "newest"
     limit: int = 100
     offset: int = 0
 

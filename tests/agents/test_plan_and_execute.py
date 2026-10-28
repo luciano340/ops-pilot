@@ -265,6 +265,7 @@ def test_planner_receives_available_tool_catalog_and_guidance() -> None:
     assert "existing service" in planner_context
     assert "required" in planner_context
     assert "severity" in planner_context
+    assert "order='oldest'" in system_prompt
     assert "title" in planner_context
     assert "service" in planner_context
     assert "list_alerts" in planner_context

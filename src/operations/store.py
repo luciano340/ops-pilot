@@ -18,9 +18,12 @@ from operations.models import Alert, Incident, Service
 
 class OperationsStore:
     async def list_alerts(self, query: ListAlertsDTO) -> AlertPageDTO:
-        queryset = Alert.objects.select_related("service").order_by(
-            "-created_at", "id"
+        ordering = (
+            ("created_at", "id")
+            if query.order == "oldest"
+            else ("-created_at", "id")
         )
+        queryset = Alert.objects.select_related("service").order_by(*ordering)
         if query.status is not None:
             queryset = queryset.filter(status=query.status)
         if query.severity is not None:
@@ -35,6 +38,7 @@ class OperationsStore:
                 "message",
                 "status",
                 "severity",
+                "created_at",
             )[query.offset : query.offset + query.limit]
             async for row in rows:
                 items.append(
@@ -45,6 +49,7 @@ class OperationsStore:
                         message=row["message"],
                         status=row["status"],
                         severity=row["severity"],
+                        created_at=row["created_at"],
                     )
                 )
             return items

@@ -1,5 +1,6 @@
 import json
 from dataclasses import asdict
+from datetime import datetime
 from typing import Any
 
 from langchain_core.tools import StructuredTool
@@ -19,12 +20,24 @@ def _service() -> OperationsService:
 
 
 def _to_json(value: object) -> str:
-    return json.dumps(value, default=str, ensure_ascii=False, sort_keys=True)
+    return json.dumps(
+        value,
+        default=_json_default,
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
+def _json_default(value: object) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
 
 
 async def list_alerts(
     status: str | None = None,
     severity: str | None = None,
+    order: str = "newest",
     limit: int = 100,
     offset: int = 0,
 ) -> str:
@@ -32,6 +45,7 @@ async def list_alerts(
         {
             "status": status,
             "severity": severity,
+            "order": order,
             "limit": limit,
             "offset": offset,
         }
@@ -40,6 +54,7 @@ async def list_alerts(
         ListAlertsDTO(
             status=payload.status,
             severity=payload.severity,
+            order=payload.order,
             limit=payload.limit,
             offset=payload.offset,
         )
@@ -78,7 +93,9 @@ def get_agent_tools() -> list[StructuredTool]:
             coroutine=list_alerts,
             name="list_alerts",
             description=(
-                "List operational alerts, optionally filtered by status or severity."
+                "List alerts, optionally filtered by status or severity. Items include "
+                "created_at as an ISO timestamp. For the oldest alert, set order to "
+                "'oldest' and use the first item; for the newest, use 'newest'."
             ),
             args_schema=ListAlertsInput,
         ),

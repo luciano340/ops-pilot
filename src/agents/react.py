@@ -56,7 +56,10 @@ class ReactStrategy(ReasoningStrategy):
             system_prompt=(
                 "You are an operations assistant. Use the available tools to "
                 "verify operational facts before answering. Never claim an "
-                "action succeeded unless the tool confirms it."
+                "action succeeded unless the tool confirms it. Complete every "
+                "requested operational action; when a request requires choosing "
+                "the oldest alert, request list_alerts with order='oldest' and "
+                "base the action on the first result's created_at and service."
             ),
         )
         counter = _CallCounter()

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest
@@ -42,6 +43,37 @@ def test_store_lists_filtered_alerts_with_total_and_page_limit() -> None:
     assert page.items[0].service == "checkout"
     assert page.items[0].status == "firing"
     assert page.items[0].severity == "critical"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_store_lists_alerts_oldest_first_with_creation_timestamps() -> None:
+    service = Service.objects.create(name="checkout")
+    first = Alert.objects.create(
+        service=service,
+        name="first",
+        status=Alert.Status.FIRING,
+    )
+    second = Alert.objects.create(
+        service=service,
+        name="second",
+        status=Alert.Status.FIRING,
+    )
+    first_created = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    second_created = first_created + timedelta(days=1)
+    Alert.objects.filter(pk=first.pk).update(created_at=first_created)
+    Alert.objects.filter(pk=second.pk).update(created_at=second_created)
+
+    page = asyncio.run(
+        OperationsStore().list_alerts(
+            ListAlertsDTO(status="firing", order="oldest")
+        )
+    )
+
+    assert [alert.name for alert in page.items] == ["first", "second"]
+    assert [alert.created_at for alert in page.items] == [
+        first_created,
+        second_created,
+    ]
 
 
 @pytest.mark.django_db(transaction=True)

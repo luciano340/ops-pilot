@@ -18,10 +18,13 @@ from operations.store import OperationsStore
 def test_tool_schemas_validate_status_nonempty_values_and_uuid() -> None:
     assert ListAlertsInput(status="firing").status == "firing"
     assert ListAlertsInput(severity="critical").severity == "critical"
+    assert ListAlertsInput(order="oldest").order == "oldest"
     with pytest.raises(ValidationError):
         ListAlertsInput(status="unknown")
     with pytest.raises(ValidationError):
         ListAlertsInput(severity="urgent")
+    with pytest.raises(ValidationError):
+        ListAlertsInput(order="random")
     with pytest.raises(ValidationError):
         OpenIncidentInput(title=" ", service="checkout", severity="high")
     with pytest.raises(ValidationError):
@@ -60,6 +63,16 @@ def test_service_rejects_unsupported_alert_severity() -> None:
         )
 
     with pytest.raises(ValueError, match="Unsupported alert severity"):
+        asyncio.run(invoke())
+
+
+def test_service_rejects_unsupported_alert_order() -> None:
+    async def invoke() -> None:
+        await OperationsService(OperationsStore()).list_alerts(
+            ListAlertsDTO(order="random")
+        )
+
+    with pytest.raises(ValueError, match="Unsupported alert order"):
         asyncio.run(invoke())
 
 

@@ -25,6 +25,7 @@ Expected behavior:
 
 - The seed runs before every scenario-strategy pair.
 - Each run captures a baseline and validates response text plus persisted ORM effects without deleting preexisting records.
+- C3 exposes alert creation timestamps to the strategies and directs them to request firing alerts in `oldest` order; the first result is the deterministic target, with ID as the tie-break.
 - The full matrix prints six rows, one per scenario and strategy, containing pass/fail, LLM calls, and latency.
 - Exit code is zero only if all selected combinations pass; otherwise it is one.
 

@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from io import StringIO
 import re
 from typing import Any
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -19,9 +20,11 @@ class _BenchmarkStrategy(ReasoningStrategy):
     def __init__(self, name: str) -> None:
         self.name = name
         self.requests: list[str] = []
+        self.event_loops: list[asyncio.AbstractEventLoop] = []
 
     async def run(self, input: str) -> StrategyResult:
         self.requests.append(input)
+        self.event_loops.append(asyncio.get_running_loop())
         if input.startswith("Quantos alertas críticos"):
             answer = "Há 3 alertas críticos disparando."
         elif input.startswith("Abra três incidentes"):
@@ -65,10 +68,12 @@ class _BenchmarkStrategy(ReasoningStrategy):
 
 def _install_fake_strategies(
     monkeypatch: pytest.MonkeyPatch,
-) -> tuple[_BenchmarkStrategy, _BenchmarkStrategy]:
+) -> tuple[Mock, _BenchmarkStrategy, _BenchmarkStrategy]:
     react = _BenchmarkStrategy("react")
     plan_and_execute = _BenchmarkStrategy("plan_and_execute")
-    monkeypatch.setattr(bench_command, "create_model", lambda: object())
+    model = Mock()
+    model.root_async_client.close = AsyncMock()
+    monkeypatch.setattr(bench_command, "create_model", lambda: model)
     monkeypatch.setattr(bench_command, "get_agent_tools", lambda: [])
     monkeypatch.setattr(bench_command, "ReactStrategy", lambda model, tools: react)
     monkeypatch.setattr(
@@ -76,14 +81,14 @@ def _install_fake_strategies(
         "PlanAndExecuteStrategy",
         lambda model, tools, *, max_iterations, no_replanner: plan_and_execute,
     )
-    return react, plan_and_execute
+    return model, react, plan_and_execute
 
 
 @pytest.mark.django_db(transaction=True)
 def test_bench_runs_default_matrix_and_preserves_existing_incidents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    react, plan_and_execute = _install_fake_strategies(monkeypatch)
+    model, react, plan_and_execute = _install_fake_strategies(monkeypatch)
     call_command("seed_db")
     checkout = Service.objects.get(name="checkout")
     existing = Incident.objects.create(
@@ -107,13 +112,16 @@ def test_bench_runs_default_matrix_and_preserves_existing_incidents(
     assert "Chamadas LLM" in output.getvalue()
     assert Incident.objects.filter(pk=existing.pk).exists()
     assert Incident.objects.count() == 9
+    assert model.root_async_client.close.await_count == 1
+    loops = react.event_loops + plan_and_execute.event_loops
+    assert len({id(loop) for loop in loops}) == 1
 
 
 @pytest.mark.django_db(transaction=True)
 def test_bench_accepts_scenario_alias_and_strategy_filter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    react, plan_and_execute = _install_fake_strategies(monkeypatch)
+    model, react, plan_and_execute = _install_fake_strategies(monkeypatch)
     output = StringIO()
 
     call_command(
@@ -125,6 +133,7 @@ def test_bench_accepts_scenario_alias_and_strategy_filter(
 
     assert len(react.requests) == 1
     assert plan_and_execute.requests == []
+    model.root_async_client.close.assert_awaited_once()
     assert output.getvalue().count("c1") == 1
     assert "PASS" in output.getvalue()
 
@@ -168,7 +177,9 @@ def test_bench_reports_failed_validation_and_raises_command_error(
             )
 
     strategy = IncorrectAnswer("react")
-    monkeypatch.setattr(bench_command, "create_model", lambda: object())
+    model = Mock()
+    model.root_async_client.close = AsyncMock()
+    monkeypatch.setattr(bench_command, "create_model", lambda: model)
     monkeypatch.setattr(bench_command, "get_agent_tools", lambda: [])
     monkeypatch.setattr(bench_command, "ReactStrategy", lambda model, tools: strategy)
     output = StringIO()
@@ -184,6 +195,7 @@ def test_bench_reports_failed_validation_and_raises_command_error(
     assert "FAIL" in output.getvalue()
     assert output.getvalue().count("| react") == 3
     assert "expected critical firing alert count" in output.getvalue()
+    assert model.root_async_client.close.await_count == 1
 
 
 @pytest.mark.django_db(transaction=True)
@@ -192,7 +204,9 @@ def test_bench_passes_no_replanner_flag_only_to_plan_and_execute(
 ) -> None:
     strategy = _BenchmarkStrategy("plan_and_execute")
     received: list[dict[str, Any]] = []
-    monkeypatch.setattr(bench_command, "create_model", lambda: object())
+    model = Mock()
+    model.root_async_client.close = AsyncMock()
+    monkeypatch.setattr(bench_command, "create_model", lambda: model)
     monkeypatch.setattr(bench_command, "get_agent_tools", lambda: [])
     monkeypatch.setattr(bench_command, "ReactStrategy", lambda model, tools: None)
 
