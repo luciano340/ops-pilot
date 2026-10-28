@@ -6,6 +6,7 @@ from django.core.management import BaseCommand, CommandError
 from pydantic import ValidationError
 
 from agents.base import ReasoningStrategy
+from agents.errors import StructuredOutputError
 from agents.factory import ModelConfigurationError, create_model
 from agents.plan_and_execute import PlanAndExecuteStrategy
 from agents.react import ReactStrategy
@@ -58,6 +59,8 @@ class Command(BaseCommand):
                 run_strategies(command_input.request, strategies)
             )
         except ModelConfigurationError as exc:
+            raise CommandError(str(exc)) from exc
+        except StructuredOutputError as exc:
             raise CommandError(str(exc)) from exc
 
         self.stdout.write(format_results(results))

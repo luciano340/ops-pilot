@@ -9,9 +9,10 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langgraph.graph import START, StateGraph
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agents.base import ReasoningStrategy
+from agents.errors import StructuredOutputError
 from agents.types import ExecutionMetrics, StrategyResult, TraceEvent
 
 MAX_ITERATIONS = 8
@@ -111,18 +112,21 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
         )
 
     async def _plan(self, state: PlanState) -> dict[str, Any]:
-        plan = await self._planner.ainvoke(
-            [
-                SystemMessage(
-                    content=(
-                        "Break the request into actionable steps. Return an empty "
-                        "steps list and an answer if no tools or actions are needed."
-                    )
-                ),
-                HumanMessage(content=state["request"]),
-            ]
-        )
-        validated = Plan.model_validate(plan)
+        try:
+            plan = await self._planner.ainvoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "Break the request into actionable steps. Return an empty "
+                            "steps list and an answer if no tools or actions are needed."
+                        )
+                    ),
+                    HumanMessage(content=state["request"]),
+                ]
+            )
+            validated = Plan.model_validate(plan)
+        except ValidationError as exc:
+            raise StructuredOutputError() from exc
         trace = [
             TraceEvent(
                 type="plan",
@@ -203,29 +207,32 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
         }
 
     async def _replan(self, state: PlanState) -> dict[str, Any]:
-        review = await self._replanner.ainvoke(
-            [
-                SystemMessage(
-                    content=(
-                        "Review execution observations. Return only the steps "
-                        "that remain necessary and a final answer when complete."
-                    )
-                ),
-                HumanMessage(
-                    content=json.dumps(
-                        {
-                            "request": state["request"],
-                            "remaining_steps": [
-                                step.description for step in state["steps"]
-                            ],
-                            "observations": state["observations"],
-                        },
-                        ensure_ascii=False,
-                    )
-                ),
-            ]
-        )
-        validated = PlanReview.model_validate(review)
+        try:
+            review = await self._replanner.ainvoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "Review execution observations. Return only the steps "
+                            "that remain necessary and a final answer when complete."
+                        )
+                    ),
+                    HumanMessage(
+                        content=json.dumps(
+                            {
+                                "request": state["request"],
+                                "remaining_steps": [
+                                    step.description for step in state["steps"]
+                                ],
+                                "observations": state["observations"],
+                            },
+                            ensure_ascii=False,
+                        )
+                    ),
+                ]
+            )
+            validated = PlanReview.model_validate(review)
+        except ValidationError as exc:
+            raise StructuredOutputError() from exc
         steps = validated.steps
         answer = validated.answer or ""
         trace = [
