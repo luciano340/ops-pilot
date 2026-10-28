@@ -10,12 +10,22 @@ from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langgraph.graph import START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic.v1 import BaseModel as PydanticV1BaseModel
 
 from agents.base import ReasoningStrategy
 from agents.errors import StructuredOutputError
 from agents.types import ExecutionMetrics, StrategyResult, TraceEvent
 
 MAX_ITERATIONS = 8
+
+
+def _tool_args_schema(tool: BaseTool) -> dict[str, Any]:
+    schema = tool.get_input_schema()
+    if issubclass(schema, BaseModel):
+        return schema.model_json_schema()
+    if issubclass(schema, PydanticV1BaseModel):
+        return schema.schema()
+    raise TypeError(f"Unsupported argument schema for tool '{tool.name}'")
 
 
 class PlanStep(BaseModel):
@@ -66,6 +76,14 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
         self._replanner: Runnable[Any, Any] = model.with_structured_output(PlanReview)
         self._executor: Runnable[Any, Any] = model.bind_tools(list(tools))
         self._tools = {tool.name: tool for tool in tools}
+        self._tool_catalog = [
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "args_schema": _tool_args_schema(tool),
+            }
+            for tool in tools
+        ]
         self._max_iterations = max_iterations
 
         builder = StateGraph(PlanState)
@@ -117,11 +135,30 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
                 [
                     SystemMessage(
                         content=(
-                            "Break the request into actionable steps. Return an empty "
-                            "steps list and an answer if no tools or actions are needed."
+                            "You are an operations planner. The available tools and "
+                            "their argument schemas are provided in the request context. "
+                            "When the user asks for an operation supported by an "
+                            "available tool, create actionable steps for the executor; "
+                            "do not claim you lack access to an operation whose tool is "
+                            "listed. Never invent required arguments or operational "
+                            "facts. If required information is missing, use an available "
+                            "read tool to find it when possible; otherwise return no "
+                            "steps and ask the user a concise clarification question. "
+                            "For operations with no available tool, explain that the "
+                            "capability is unsupported and do not claim it was done. "
+                            "For requests needing no action, return no steps and a "
+                            "direct answer."
                         )
                     ),
-                    HumanMessage(content=state["request"]),
+                    HumanMessage(
+                        content=json.dumps(
+                            {
+                                "request": state["request"],
+                                "available_tools": self._tool_catalog,
+                            },
+                            ensure_ascii=False,
+                        )
+                    ),
                 ]
             )
             validated = Plan.model_validate(plan)
@@ -212,8 +249,15 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
                 [
                     SystemMessage(
                         content=(
-                            "Review execution observations. Return only the steps "
-                            "that remain necessary and a final answer when complete."
+                            "Review execution observations using the available tools "
+                            "and their argument schemas in the request context. Return "
+                            "only the remaining actionable steps and a final answer "
+                            "when complete. Never invent required arguments or claim "
+                            "an action succeeded without a confirming observation. If "
+                            "required information is missing and cannot be found with "
+                            "an available read tool, ask the user a concise clarification "
+                            "question. Explain unsupported operations without claiming "
+                            "they were done."
                         )
                     ),
                     HumanMessage(
@@ -224,6 +268,7 @@ class PlanAndExecuteStrategy(ReasoningStrategy):
                                     step.description for step in state["steps"]
                                 ],
                                 "observations": state["observations"],
+                                "available_tools": self._tool_catalog,
                             },
                             ensure_ascii=False,
                         )
