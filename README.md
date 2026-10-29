@@ -76,6 +76,27 @@ resposta, trace e métricas (`llm_calls` e `latency_ms`) de cada estratégia.
 Chamadas reais à arena exigem credenciais OpenRouter e podem usar as ferramentas
 de escrita de incidentes.
 
+## API de chat
+
+O endpoint `POST /chat` executa uma estratégia de raciocínio e retorna
+`answer`, `trace` e `metrics`. O corpo JSON aceita `message` obrigatório,
+`strategy` opcional (`react` por padrão ou `plan_and_execute`) e `reflect`
+opcional (padrão `false`):
+
+```powershell
+curl.exe -i -X POST http://127.0.0.1:8000/chat `
+  -H "Content-Type: application/json" `
+  --data-binary "{`"message`":`"Liste alertas disparando`",`"strategy`":`"react`"}"
+```
+
+Payload inválido retorna HTTP 400 com `issues`; estratégia desconhecida retorna
+HTTP 422; execução acima de 180 segundos retorna HTTP 504. As mensagens de erro
+não incluem valores de entrada, stack traces ou detalhes do provedor. A API
+reutiliza as estratégias e ferramentas existentes e chamadas reais precisam de
+`OPENROUTER_API_KEY` e `OPENROUTER_MODEL`. Veja o
+[contrato HTTP de chat](specs/006-chat-api/contracts/chat-api.md) para os
+formatos completos de requisição, resposta e erro.
+
 ## Docker Compose
 
 Com Docker e Docker Compose instalados, crie o arquivo de ambiente:
